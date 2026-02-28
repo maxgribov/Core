@@ -46,12 +46,15 @@ final class ViewStoreTests: XCTestCase {
         XCTAssertEqual(sut.state, updatedState)
     }
 
-    func test_handle_invokesHandleEffectOnReducerReturnsEffect() {
+    func test_handle_invokesHandleEffectOnReducerReturnsEffect() async {
         let (sut, reducer, effectHandler) = makeSUT(state: makeSampleState())
         let effect = makeSampleEffect()
         reducer.stub = [(makeSampleState(), effect)]
 
+        let expectation = expectation(description: "handle called")
+        effectHandler.onHandleCalled = { expectation.fulfill() }
         sut.handle(makeSampleEvent())
+        await fulfillment(of: [expectation], timeout: 0.1)
 
         XCTAssertEqual(effectHandler.messages, [effect])
     }
@@ -140,11 +143,13 @@ final class ViewStoreTests: XCTestCase {
         private let (stream, continuation) = AsyncStream.makeStream(of: SampleEvent.self)
         private(set) var messages: [SampleEffect] = []
         var callsCount: Int { messages.count }
+        var onHandleCalled: (@Sendable () -> Void)?
 
         var events: AsyncStream<SampleEvent> { stream }
 
-        func handle(_ effect: SampleEffect) {
+        func handle(_ effect: SampleEffect) async {
             messages.append(effect)
+            onHandleCalled?()
         }
 
         func simulateDispatch(with event: SampleEvent) {

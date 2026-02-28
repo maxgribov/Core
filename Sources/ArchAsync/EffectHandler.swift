@@ -7,10 +7,10 @@
 
 import Foundation
 
-public protocol EffectHandler<Effect, Event> {
+public protocol EffectHandler<Effect, Event>: Sendable {
     associatedtype Effect
     associatedtype Event
 
     var events: AsyncStream<Event> { get }
-    func handle(_ effect: Effect)
+    func handle(_ effect: Effect) async
 }

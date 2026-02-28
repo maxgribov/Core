@@ -13,7 +13,7 @@ import Observation
 public final class ViewStore<State, Event, Effect, R, E>
 where R: Reducer, R.State == State, R.Event == Event, R.Effect == Effect,
       E: EffectHandler, E.Effect == Effect, E.Event == Event,
-      Event: Sendable {
+      Event: Sendable, Effect: Sendable {
 
     public private(set) var state: State
 
@@ -37,7 +37,10 @@ where R: Reducer, R.State == State, R.Event == Event, R.Effect == Effect,
 
     public func handle(_ event: Event) {
         if let effect = reducer.reduce(&state, event) {
-            effectHandler.handle(effect)
+            let handler = effectHandler
+            Task.detached {
+                await handler.handle(effect)
+            }
         }
     }
     
