@@ -5,11 +5,15 @@ import PackageDescription
 
 let package = Package(
     name: "Core",
-    platforms: [.iOS(.v16), .macOS(.v13), .tvOS(.v16), .watchOS(.v9)],
+    platforms: [.iOS(.v17), .macOS(.v14), .tvOS(.v17), .watchOS(.v10)],
     products: [
         .library(
             name: "Arch",
             targets: ["Arch"]
+        ),
+        .library(
+            name: "ArchAsync",
+            targets: ["ArchAsync"]
         ),
     ],
     dependencies: [
@@ -17,11 +21,21 @@ let package = Package(
     targets: [
         .target(
             name: "Arch",
+            exclude: ["Example.md", "Documentation.md"],
             swiftSettings: [.enableExperimentalFeature("StrictConcurrency")]
         ),
         .testTarget(
             name: "ArchTests",
             dependencies: ["Arch"],
+            swiftSettings: [.enableExperimentalFeature("StrictConcurrency")]
+        ),
+        .target(
+            name: "ArchAsync",
+            swiftSettings: [.enableExperimentalFeature("StrictConcurrency")]
+        ),
+        .testTarget(
+            name: "ArchAsyncTests",
+            dependencies: ["ArchAsync"],
             swiftSettings: [.enableExperimentalFeature("StrictConcurrency")]
         ),
     ]

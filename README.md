@@ -11,19 +11,39 @@ Architecture layer containing core components for implementing Redux-like archit
 - **EffectHandler** - Protocol for handling side effects
 - **ViewStore** - Main class for connecting UI and business logic
 
+### ArchAsync
+Swift Concurrency version of Arch with async/await, AsyncStream for effects, and @Observable:
+
+- **Reducer** - Protocol with Sendable types
+- **EffectHandler** - Protocol with `events: AsyncStream<Event>` and `handle(_ effect:)`
+- **ViewStore** - @MainActor, @Observable class for SwiftUI integration
+
+Requires iOS 17+, macOS 14+, tvOS 17+, watchOS 10+.
+
 ## Usage
 
+### Arch (callback-based)
 ```swift
 import Arch
 
-// Creating ViewStore
 let viewStore = ViewStore(
     initial: initialState,
     reducer: myReducer,
     effectHandler: myEffectHandler
 )
+viewStore.handle(event)
+```
 
-// Dispatching events
+### ArchAsync (Swift Concurrency)
+```swift
+import ArchAsync
+
+@MainActor
+let viewStore = ViewStore(
+    initial: initialState,
+    reducer: myReducer,
+    effectHandler: myEffectHandler
+)
 viewStore.handle(event)
 ```
 
@@ -38,4 +58,4 @@ swift test
 ## Dependencies
 
 - Swift 5.10+
-- iOS 16+, macOS 13+, tvOS 16+, watchOS 9+ 
+- iOS 17+, macOS 14+, tvOS 17+, watchOS 10+ (package-level platforms for ArchAsync) 
