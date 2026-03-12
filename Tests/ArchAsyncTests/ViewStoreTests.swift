@@ -1,0 +1,140 @@
+//
+//  ViewStoreTests.swift
+//  Core
+//
+//  Created by Max Gribov on 28.02.2026.
+//
+
+import XCTest
+import ArchAsync
+
+@MainActor
+final class ViewStoreTests: XCTestCase {
+
+    func test_init_deliversStateEqualToInitialState() {
+        let initialState = makeSampleState()
+        let (sut, _) = makeSUT(state: initialState)
+
+        XCTAssertEqual(sut.state, initialState)
+    }
+
+    func test_init_shouldNotCallCollaborators() {
+        let (_, deps) = makeSUT(state: makeSampleState())
+
+        XCTAssertEqual(deps.reducer.callsCount, 0)
+        XCTAssertEqual(deps.effectHandler.callsCount, 0)
+    }
+
+    func test_handle_invokesReducerOnAnyEvent() {
+        let state = makeSampleState()
+        let (sut, deps) = makeSUT(state: state)
+
+        let event = makeSampleEvent()
+        sut.handle(event)
+
+        XCTAssertEqual(deps.reducer.messages.map(\.state), [state])
+        XCTAssertEqual(deps.reducer.messages.map(\.event), [event])
+    }
+
+    func test_handle_updatesStateOnReducerStateUpdate() {
+        let (sut, deps) = makeSUT(state: makeSampleState())
+        let updatedState = makeSampleState(value: "updated")
+        deps.reducer.stub = [(updatedState, nil)]
+
+        sut.handle(makeSampleEvent())
+
+        XCTAssertEqual(sut.state, updatedState)
+    }
+
+    func test_handle_invokesHandleEffectOnReducerReturnsEffect() async {
+        let (sut, deps) = makeSUT(state: makeSampleState())
+        let effect = makeSampleEffect()
+        deps.reducer.stub = [(makeSampleState(), effect)]
+
+        let expectation = expectation(description: "handle called")
+        deps.effectHandler.onHandleCalled = { expectation.fulfill() }
+        sut.handle(makeSampleEvent())
+        await fulfillment(of: [expectation], timeout: 0.1)
+
+        XCTAssertEqual(deps.effectHandler.messages, [effect])
+    }
+
+    func test_handle_invokesReducerOnHandleEffectEvent() async {
+        let (sut, deps) = makeSUT(state: makeSampleState())
+        deps.reducer.stub = [
+            (makeSampleState(), makeSampleEffect()),
+            (makeSampleState(), nil)
+        ]
+        let sutEvent = makeSampleEvent()
+        let effectHandlerEvent = makeSampleEvent()
+        
+        let expectation = expectation(description: "wait for all reducer calls")
+        expectation.expectedFulfillmentCount = 2
+        deps.reducer.reduceCallObserver = { messages in
+            expectation.fulfill()
+        }
+        
+        sut.handle(sutEvent)
+        deps.effectHandler.simulateDispatch(with: effectHandlerEvent)
+        await fulfillment(of: [expectation], timeout: 0.1)
+
+        XCTAssertEqual(deps.reducer.messages.map(\.event), [sutEvent, effectHandlerEvent])
+    }
+
+    //MARK: - Helpers
+    
+    private typealias SUT = ViewStore<SampleState, SampleEvent, SampleEffect, ReducerSpy<SampleState, SampleEvent, SampleEffect>, EffectHandlerSpy<SampleEvent, SampleEffect>>
+
+    private func makeSUT(
+        state: SampleState,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) -> (sut: SUT, deps: Dependencies) {
+        let reducerSpy = ReducerSpy<SampleState, SampleEvent, SampleEffect>()
+        let effectHandlerSpy = EffectHandlerSpy<SampleEvent, SampleEffect>()
+        let sut = SUT(
+            initial: state,
+            reducer: reducerSpy,
+            effectHandler: effectHandlerSpy
+        )
+
+        trackForMemoryLeaks(reducerSpy, file: file, line: line)
+        trackForMemoryLeaks(effectHandlerSpy, file: file, line: line)
+        trackForMemoryLeaks(sut, file: file, line: line)
+
+        return (sut, Dependencies(reducer: reducerSpy, effectHandler: effectHandlerSpy))
+    }
+    
+    private struct Dependencies {
+        let reducer: ReducerSpy<SampleState, SampleEvent, SampleEffect>
+        let effectHandler: EffectHandlerSpy<SampleEvent, SampleEffect>
+    }
+
+    private struct SampleState: Equatable, Sendable {
+        let id: UUID
+        let value: String
+    }
+
+    private enum SampleEvent: Equatable, Sendable {
+        case event(UUID)
+    }
+
+    private enum SampleEffect: Equatable, Sendable {
+        case effect(UUID)
+    }
+
+    private func makeSampleState(
+        id: UUID = UUID(),
+        value: String = ""
+    ) -> SampleState {
+        SampleState(id: id, value: value)
+    }
+
+    private func makeSampleEvent(_ id: UUID = UUID()) -> SampleEvent {
+        .event(id)
+    }
+
+    private func makeSampleEffect(_ id: UUID = UUID()) -> SampleEffect {
+        .effect(id)
+    }
+}
