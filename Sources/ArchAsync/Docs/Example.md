@@ -101,19 +101,33 @@ protocol TodoStorage: Sendable {
 
 final class TodoEffectHandler: EffectHandler, Sendable {
     private let storage: TodoStorage
+    private let tasksBag = TasksBag()
 
     init(storage: TodoStorage) {
         self.storage = storage
     }
 
-    func handle(_ effect: TodoEffect) async -> AsyncStream<TodoEvent> {
+    deinit {
+        tasksBag.cancelAll()
+    }
+
+    func handle(_ effect: TodoEffect) -> AsyncStream<TodoEvent> {
         switch effect {
         case .loadTodos:
-            do {
-                let todos = try await storage.loadTodos()
-                return .single(.todosLoaded(todos))
-            } catch {
-                return .single(.loadingFailed(error.localizedDescription))
+            let storage = self.storage
+            return AsyncStream { continuation in
+                let task = Task {
+                    do {
+                        let todos = try await storage.loadTodos()
+                        guard !Task.isCancelled else { return }
+                        continuation.yield(.todosLoaded(todos))
+                    } catch {
+                        guard !Task.isCancelled else { return }
+                        continuation.yield(.loadingFailed(error.localizedDescription))
+                    }
+                    continuation.finish()
+                }
+                self.tasksBag.add(task)
             }
         }
     }
@@ -220,20 +234,15 @@ final class UserDefaultsTodoStorage: TodoStorage, Sendable {
     private let key = "saved_todos"
 
     func loadTodos() async throws -> [Todo] {
-        await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .background).async {
-                guard let data = UserDefaults.standard.data(forKey: self.key),
-                      let todos = try? JSONDecoder().decode([Todo].self, from: data) else {
-                    continuation.resume(returning: [
-                        Todo(title: "Learn SwiftUI"),
-                        Todo(title: "Master ArchAsync pattern"),
-                        Todo(title: "Build amazing apps")
-                    ])
-                    return
-                }
-                continuation.resume(returning: todos)
-            }
+        guard let data = UserDefaults.standard.data(forKey: key),
+              let todos = try? JSONDecoder().decode([Todo].self, from: data) else {
+            return [
+                Todo(title: "Learn SwiftUI"),
+                Todo(title: "Master ArchAsync pattern"),
+                Todo(title: "Build amazing apps")
+            ]
         }
+        return todos
     }
 }
 ```
