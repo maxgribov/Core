@@ -29,7 +29,6 @@ where R: Reducer, R.State == State, R.Event == Event, R.Effect == Effect,
     private let reducer: R
     private let effectHandler: E
 
-    @ObservationIgnored
     private let tasksBag = TasksBag()
 
     /// Creates a new view store.
