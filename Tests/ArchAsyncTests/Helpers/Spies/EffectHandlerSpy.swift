@@ -19,15 +19,18 @@ final class EffectHandlerSpy<Event: Sendable, Effect>: EffectHandler, @unchecked
     var streamProvider: (@Sendable (Effect) -> AsyncStream<Event>)?
 
     func handle(_ effect: Effect) -> AsyncStream<Event> {
-        lock.withLock { _messages.append(effect) }
-        if let streamProvider {
-            let stream = streamProvider(effect)
-            onHandleCalled?()
+        let (currentStreamProvider, currentOnHandleCalled) = lock.withLock {
+            _messages.append(effect)
+            return (streamProvider, onHandleCalled)
+        }
+        if let currentStreamProvider {
+            let stream = currentStreamProvider(effect)
+            currentOnHandleCalled?()
             return stream
         }
         let (stream, continuation) = AsyncStream.makeStream(of: Event.self)
         lock.withLock { continuations.append(continuation) }
-        onHandleCalled?()
+        currentOnHandleCalled?()
         return stream
     }
 

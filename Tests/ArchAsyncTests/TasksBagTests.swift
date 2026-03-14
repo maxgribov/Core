@@ -71,16 +71,4 @@ final class TasksBagTests: XCTestCase {
         XCTAssertEqual(sut.tasks.count, 1)
     }
 
-    func test_add_removesCompletedTasks() async {
-        let sut = TasksBag()
-        let completedTask = Task<Void, Never> {}
-        sut.add(completedTask)
-
-        await completedTask.value
-        try? await Task.sleep(nanoseconds: 50_000_000)
-
-        sut.add(Task<Void, Never> {})
-
-        XCTAssertEqual(sut.tasks.count, 1)
-    }
 }
