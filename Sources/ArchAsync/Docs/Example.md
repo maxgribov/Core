@@ -67,7 +67,7 @@ enum TodoEffect: Sendable {
 ```swift
 import ArchAsync
 
-final class TodoReducer: Reducer {
+struct TodoReducer: Reducer {
 
     func reduce(_ state: inout TodoState, _ event: TodoEvent) -> TodoEffect? {
         switch event {

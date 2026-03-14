@@ -8,6 +8,14 @@
 import Foundation
 import Observation
 
+/// The central coordinator of the unidirectional data flow architecture.
+///
+/// `ViewStore` holds the current state, invokes the ``Reducer`` on incoming events,
+/// forwards returned effects to the ``EffectHandler``, and feeds handler-emitted events
+/// back into the cycle. It is marked `@Observable` for SwiftUI integration and
+/// `@MainActor` to ensure state mutations happen on the main thread.
+///
+/// All running effect tasks are cancelled automatically when the `ViewStore` is deallocated.
 @MainActor
 @Observable
 public final class ViewStore<State, Event, Effect, R, E>
@@ -15,6 +23,7 @@ where R: Reducer, R.State == State, R.Event == Event, R.Effect == Effect,
       E: EffectHandler, E.Effect == Effect, E.Event == Event,
       State: Sendable, Event: Sendable, Effect: Sendable {
 
+    /// The current state of the feature, updated synchronously by the reducer.
     public private(set) var state: State
 
     private let reducer: R
@@ -23,6 +32,12 @@ where R: Reducer, R.State == State, R.Event == Event, R.Effect == Effect,
     @ObservationIgnored
     private let taskBag = TasksBag()
 
+    /// Creates a new view store.
+    ///
+    /// - Parameters:
+    ///   - state: The initial state.
+    ///   - reducer: The reducer that processes events and updates state.
+    ///   - effectHandler: The handler that executes side effects.
     public init(initial state: State, reducer: R, effectHandler: E) {
         self.state = state
         self.reducer = reducer
@@ -35,6 +50,9 @@ where R: Reducer, R.State == State, R.Event == Event, R.Effect == Effect,
         taskBag.cancelAll()
     }
 
+    /// Dispatches an event into the store, triggering the reducer and any resulting effects.
+    ///
+    /// - Parameter event: The event to process.
     public func handle(_ event: Event) {
         if let effect = reducer.reduce(&state, event) {
             let handler = effectHandler
