@@ -7,10 +7,22 @@
 
 import Foundation
 
+/// Executes side effects and returns resulting events as an `AsyncStream`.
+///
+/// Implement this protocol to handle effects produced by the ``Reducer``.
+/// Each call to `handle(_:)` returns an `AsyncStream` of events that the ``ViewStore``
+/// subscribes to. The method itself is synchronous — wrap any asynchronous work
+/// inside the returned stream. Use the convenience helpers `AsyncStream.single(_:)` and
+/// `AsyncStream.empty` for common cases.
 public protocol EffectHandler<Effect, Event>: Sendable {
+    /// The type of effect this handler can execute.
     associatedtype Effect
+    /// The type of event emitted back to the ``ViewStore`` after handling an effect.
     associatedtype Event
 
-    var events: AsyncStream<Event> { get }
-    func handle(_ effect: Effect) async
+    /// Handles the given effect and returns a stream of resulting events.
+    ///
+    /// - Parameter effect: The effect to handle.
+    /// - Returns: An `AsyncStream` of events produced by this effect.
+    func handle(_ effect: Effect) -> AsyncStream<Event>
 }

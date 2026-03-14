@@ -67,18 +67,79 @@ final class ViewStoreTests: XCTestCase {
         ]
         let sutEvent = makeSampleEvent()
         let effectHandlerEvent = makeSampleEvent()
-        
-        let expectation = expectation(description: "wait for all reducer calls")
-        expectation.expectedFulfillmentCount = 2
-        deps.reducer.reduceCallObserver = { messages in
-            expectation.fulfill()
+
+        let handleCalled = expectation(description: "handle called")
+        deps.effectHandler.onHandleCalled = { handleCalled.fulfill() }
+
+        let allReducerCalls = expectation(description: "wait for all reducer calls")
+        allReducerCalls.expectedFulfillmentCount = 2
+        deps.reducer.reduceCallObserver = { _ in
+            allReducerCalls.fulfill()
         }
-        
+
         sut.handle(sutEvent)
+        await fulfillment(of: [handleCalled], timeout: 0.1)
         deps.effectHandler.simulateDispatch(with: effectHandlerEvent)
-        await fulfillment(of: [expectation], timeout: 0.1)
+        await fulfillment(of: [allReducerCalls], timeout: 0.1)
 
         XCTAssertEqual(deps.reducer.messages.map(\.event), [sutEvent, effectHandlerEvent])
+    }
+
+    func test_deinit_cancelsInFlightEffects() async {
+        let effectStarted = expectation(description: "effect started")
+        let effectCancelled = expectation(description: "effect cancelled")
+
+        var sut: SUT?
+        let deps: Dependencies
+        (sut, deps) = makeSUT(state: makeSampleState())
+
+        deps.effectHandler.streamProvider = { @Sendable _ in
+            AsyncStream { continuation in
+                effectStarted.fulfill()
+                continuation.onTermination = { @Sendable _ in
+                    effectCancelled.fulfill()
+                }
+            }
+        }
+        deps.reducer.stub = [(makeSampleState(), makeSampleEffect())]
+
+        sut?.handle(makeSampleEvent())
+        await fulfillment(of: [effectStarted], timeout: 0.5)
+
+        sut = nil
+        await fulfillment(of: [effectCancelled], timeout: 1.0)
+    }
+
+    func test_deinit_stopsProcessingEffectHandlerEvents() async {
+        let deps: Dependencies
+        do {
+            var sut: SUT?
+            (sut, deps) = makeSUT(state: makeSampleState())
+            _ = sut
+            sut = nil
+        }
+
+        deps.effectHandler.simulateDispatch(with: makeSampleEvent())
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(deps.reducer.callsCount, 0)
+    }
+
+    func test_handle_multipleEffectsHandledConcurrently() async {
+        let (sut, deps) = makeSUT(state: makeSampleState())
+        let effectCount = 10
+        deps.reducer.stub = (0..<effectCount).map { _ in (makeSampleState(), makeSampleEffect()) }
+
+        let allHandled = expectation(description: "all effects handled")
+        allHandled.expectedFulfillmentCount = effectCount
+        deps.effectHandler.onHandleCalled = { allHandled.fulfill() }
+
+        for _ in 0..<effectCount {
+            sut.handle(makeSampleEvent())
+        }
+
+        await fulfillment(of: [allHandled], timeout: 1.0)
+        XCTAssertEqual(deps.effectHandler.messages.count, effectCount)
     }
 
     //MARK: - Helpers

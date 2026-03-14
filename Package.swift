@@ -21,7 +21,7 @@ let package = Package(
     targets: [
         .target(
             name: "Arch",
-            exclude: ["Example.md", "Documentation.md"],
+            exclude: ["Docs"],
             swiftSettings: [.enableExperimentalFeature("StrictConcurrency")]
         ),
         .testTarget(
@@ -31,6 +31,7 @@ let package = Package(
         ),
         .target(
             name: "ArchAsync",
+            exclude: ["Docs"],
             swiftSettings: [.enableExperimentalFeature("StrictConcurrency")]
         ),
         .testTarget(
