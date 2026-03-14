@@ -51,25 +51,21 @@ public protocol EffectHandler<Effect, Event>: Sendable {
     associatedtype Effect
     associatedtype Event
 
-    var events: AsyncStream<Event> { get }
-    func handle(_ effect: Effect) async
+    func handle(_ effect: Effect) async -> AsyncStream<Event>
 }
 ```
 
-**Purpose**: Handles side effects asynchronously and yields new events through an `AsyncStream`.
+**Purpose**: Handles side effects asynchronously and returns resulting events as an `AsyncStream` per effect.
 
 **Sendable**: Required because effects are handled via `Task.detached`, so the handler is captured across isolation boundaries.
 
 **Requirements**:
-- `events`: AsyncStream for emitting events back to ViewStore
-- `handle(_:)`: Async method that processes effects
+- `handle(_:)`: Async method that processes effects and returns an `AsyncStream<Event>` of resulting events
 
 **Principles**:
-- Uses `AsyncStream` for event feedback
-- Handles asynchronous operations natively with async/await
-- Yields events to the stream after async work completes
-
-**Implementation pattern**: Create stream with `AsyncStream.makeStream(of: Event.self)` and yield events via continuation after async operations complete.
+- Each effect produces its own independent stream of events
+- Uses `AsyncStream` for event feedback — no shared stream or continuation boilerplate needed
+- Use convenience helpers `AsyncStream.single(_:)` and `AsyncStream.empty` for common cases
 
 ## Main Class
 
@@ -95,18 +91,17 @@ where R: Reducer, R.State == State, R.Event == Event, R.Effect == Effect,
 - `taskBag`: A `TasksBag` instance that tracks all spawned tasks (private)
 
 **Methods**:
-- `init(initial:reducer:effectHandler:)`: Initialization with initial state, subscribes to effect handler events
+- `init(initial:reducer:effectHandler:)`: Initialization with initial state
 - `handle(_:)`: Event processing
 - `deinit`: Cancels all running tasks via `taskBag.cancelAll()`
 
 **Features**:
 - `@MainActor` isolates UI updates to the main thread
 - Marked with `@Observable` for SwiftUI integration
-- Automatically subscribes to `effectHandler.events` and dispatches yielded events
-- Effects are handled via `Task.detached` for concurrent execution
+- Each effect is handled via `Task.detached`; the returned per-effect stream is iterated in the same task
 - Uses `TasksBag` (thread-safe via `NSLock`) to track all spawned tasks
-- Cancels all tasks on `deinit`, including the event subscription and in-flight effect tasks
-- The event subscription loop checks `Task.isCancelled` to stop promptly on cancellation
+- Cancels all tasks on `deinit`, stopping in-flight effects and stream iteration
+- The stream iteration loop checks `Task.isCancelled` to stop promptly on cancellation
 
 ### TasksBag
 
@@ -121,9 +116,8 @@ An internal, thread-safe container for tracking spawned `Task` instances. Uses `
 1. **Event** → ViewStore receives event through `handle(_:)`
 2. **Reduction** → Reducer changes state and returns effect
 3. **UI Update** → New state triggers observation, view re-renders
-4. **Effect Handling** → EffectHandler executes effect asynchronously (via `Task.detached`)
-5. **Event Yield** → EffectHandler yields event to AsyncStream
-6. **Subscription** → ViewStore receives event from stream and calls `handle(_:)` again
+4. **Effect Handling** → EffectHandler executes effect asynchronously (via `Task.detached`) and returns per-effect `AsyncStream<Event>`
+5. **Stream Iteration** → ViewStore iterates the returned stream and calls `handle(_:)` for each event
 
 ```
 ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
@@ -188,14 +182,11 @@ struct AppReducer: Reducer {
 }
 
 final class AppEffectHandler: EffectHandler, Sendable {
-    private let (stream, continuation) = AsyncStream.makeStream(of: AppEvent.self)
-    var events: AsyncStream<AppEvent> { stream }
-
-    func handle(_ effect: AppEffect) async {
+    func handle(_ effect: AppEffect) async -> AsyncStream<AppEvent> {
         switch effect {
         case .loadDataFromAPI:
             let data = await loadDataFromServer()
-            continuation.yield(.dataLoaded(data))
+            return .single(.dataLoaded(data))
         }
     }
 }
@@ -211,7 +202,7 @@ let viewStore = ViewStore(
 
 1. **Sendable types**: State, Event, and Effect must be `Sendable` — this is enforced by the generic constraints on `ViewStore`
 2. **Use enum for events**: This makes code more type-safe
-3. **Stream lifecycle**: Create `AsyncStream` in EffectHandler init; do not finish continuation until handler is deallocated
+3. **Use convenience helpers**: Use `AsyncStream.single(_:)` for effects that produce one event, and `AsyncStream.empty` for effects that produce none
 4. **Test reducers**: Pure reduction logic is easy to unit test
 5. **Isolate side effects**: All asynchronous logic should be in EffectHandler
 6. **Struct reducers**: Prefer `struct` for reducers — they are pure functions with no mutable state

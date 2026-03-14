@@ -22,7 +22,7 @@ This is a Swift Package (`Core`) providing two Redux/Elm-inspired unidirectional
 
 | | **Arch** (callback-based) | **ArchAsync** (Swift Concurrency) |
 |---|---|---|
-| Effect dispatch | Callback `(Event) -> Void` | `AsyncStream<Event>` |
+| Effect dispatch | Callback `(Event) -> Void` | Returns `AsyncStream<Event>` per effect |
 | ViewStore | `ObservableObject` | `@Observable`, `@MainActor` |
 | Effect execution | Synchronous dispatch | `Task.detached` |
 
@@ -33,7 +33,7 @@ This is a Swift Package (`Core`) providing two Redux/Elm-inspired unidirectional
 ### Key protocols (per module)
 
 - **Reducer** — pure function: mutates state, optionally returns an effect
-- **EffectHandler** — executes side effects; in Arch via callback, in ArchAsync via async + AsyncStream
+- **EffectHandler** — executes side effects; in Arch via callback, in ArchAsync returns `AsyncStream<Event>` per effect
 
 ### Test conventions
 

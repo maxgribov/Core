@@ -18,12 +18,11 @@ final class EffectHandlerSpy<Event: Sendable, Effect>: EffectHandler, @unchecked
     var onHandleCalled: (@Sendable () -> Void)?
     var handleBlock: (@Sendable (Effect) async -> Void)?
 
-    var events: AsyncStream<Event> { stream }
-
-    func handle(_ effect: Effect) async {
+    func handle(_ effect: Effect) async -> AsyncStream<Event> {
         lock.withLock { _messages.append(effect) }
         await handleBlock?(effect)
         onHandleCalled?()
+        return stream
     }
 
     func simulateDispatch(with event: Event) {

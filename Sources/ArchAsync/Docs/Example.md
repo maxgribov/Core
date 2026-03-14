@@ -89,7 +89,7 @@ struct TodoReducer: Reducer {
 
 ### 5. Implement the EffectHandler
 
-The EffectHandler uses `AsyncStream` to send events back to the ViewStore. Events are yielded to the stream's continuation after async work completes.
+The EffectHandler returns an `AsyncStream<Event>` per effect. Use `AsyncStream.single(_:)` for effects that produce a single event.
 
 ```swift
 import ArchAsync
@@ -100,23 +100,20 @@ protocol TodoStorage: Sendable {
 }
 
 final class TodoEffectHandler: EffectHandler, Sendable {
-    private let (stream, continuation) = AsyncStream.makeStream(of: TodoEvent.self)
     private let storage: TodoStorage
-
-    var events: AsyncStream<TodoEvent> { stream }
 
     init(storage: TodoStorage) {
         self.storage = storage
     }
 
-    func handle(_ effect: TodoEffect) async {
+    func handle(_ effect: TodoEffect) async -> AsyncStream<TodoEvent> {
         switch effect {
         case .loadTodos:
             do {
                 let todos = try await storage.loadTodos()
-                continuation.yield(.todosLoaded(todos))
+                return .single(.todosLoaded(todos))
             } catch {
-                continuation.yield(.loadingFailed(error.localizedDescription))
+                return .single(.loadingFailed(error.localizedDescription))
             }
         }
     }

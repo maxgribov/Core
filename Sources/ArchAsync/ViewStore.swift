@@ -30,7 +30,7 @@ where R: Reducer, R.State == State, R.Event == Event, R.Effect == Effect,
     private let effectHandler: E
 
     @ObservationIgnored
-    private let taskBag = TasksBag()
+    private let tasksBag = TasksBag()
 
     /// Creates a new view store.
     ///
@@ -42,12 +42,10 @@ where R: Reducer, R.State == State, R.Event == Event, R.Effect == Effect,
         self.state = state
         self.reducer = reducer
         self.effectHandler = effectHandler
-
-        subscribeEffectHandlerEvents()
     }
 
     deinit {
-        taskBag.cancelAll()
+        tasksBag.cancelAll()
     }
 
     /// Dispatches an event into the store, triggering the reducer and any resulting effects.
@@ -56,22 +54,15 @@ where R: Reducer, R.State == State, R.Event == Event, R.Effect == Effect,
     public func handle(_ event: Event) {
         if let effect = reducer.reduce(&state, event) {
             let handler = effectHandler
-            let task = Task.detached {
-                await handler.handle(effect)
+            let task = Task.detached { [weak self] in
+                let events = await handler.handle(effect)
+                for await event in events {
+                    if Task.isCancelled { return }
+                    await self?.handle(event)
+                }
             }
-            taskBag.add(task)
+            tasksBag.add(task)
         }
-    }
-
-    private func subscribeEffectHandlerEvents() {
-        let events = effectHandler.events
-        let task = Task { [weak self] in
-            for await event in events {
-                if Task.isCancelled { return }
-                self?.handle(event)
-            }
-        }
-        taskBag.add(task)
     }
 }
 
