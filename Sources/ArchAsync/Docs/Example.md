@@ -101,14 +101,9 @@ protocol TodoStorage: Sendable {
 
 final class TodoEffectHandler: EffectHandler, Sendable {
     private let storage: TodoStorage
-    private let tasksBag = TasksBag()
 
     init(storage: TodoStorage) {
         self.storage = storage
-    }
-
-    deinit {
-        tasksBag.cancelAll()
     }
 
     func handle(_ effect: TodoEffect) -> AsyncStream<TodoEvent> {
@@ -127,7 +122,7 @@ final class TodoEffectHandler: EffectHandler, Sendable {
                         continuation.yield(.loadingFailed(error.localizedDescription))
                     }
                 }
-                self.tasksBag.add(task)
+                continuation.onTermination = { _ in task.cancel() }
             }
         }
     }
