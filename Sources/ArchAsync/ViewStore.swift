@@ -55,29 +55,13 @@ where R: Reducer, R.State == State, R.Event == Event, R.Effect == Effect,
         if let effect = reducer.reduce(&state, event) {
             let handler = effectHandler
             let task = Task.detached { [weak self] in
-                let events = await handler.handle(effect)
+                let events = handler.handle(effect)
                 for await event in events {
                     if Task.isCancelled { return }
                     await self?.handle(event)
                 }
             }
             tasksBag.add(task)
-        }
-    }
-}
-
-final class TasksBag: @unchecked Sendable {
-    private let lock = NSLock()
-    private var tasks: [Task<Void, Never>] = []
-
-    func add(_ task: Task<Void, Never>) {
-        lock.withLock { tasks.append(task) }
-    }
-
-    func cancelAll() {
-        lock.withLock {
-            tasks.forEach { $0.cancel() }
-            tasks.removeAll()
         }
     }
 }

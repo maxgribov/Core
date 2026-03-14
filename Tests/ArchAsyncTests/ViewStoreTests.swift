@@ -67,16 +67,20 @@ final class ViewStoreTests: XCTestCase {
         ]
         let sutEvent = makeSampleEvent()
         let effectHandlerEvent = makeSampleEvent()
-        
-        let expectation = expectation(description: "wait for all reducer calls")
-        expectation.expectedFulfillmentCount = 2
-        deps.reducer.reduceCallObserver = { messages in
-            expectation.fulfill()
+
+        let handleCalled = expectation(description: "handle called")
+        deps.effectHandler.onHandleCalled = { handleCalled.fulfill() }
+
+        let allReducerCalls = expectation(description: "wait for all reducer calls")
+        allReducerCalls.expectedFulfillmentCount = 2
+        deps.reducer.reduceCallObserver = { _ in
+            allReducerCalls.fulfill()
         }
-        
+
         sut.handle(sutEvent)
+        await fulfillment(of: [handleCalled], timeout: 0.1)
         deps.effectHandler.simulateDispatch(with: effectHandlerEvent)
-        await fulfillment(of: [expectation], timeout: 0.1)
+        await fulfillment(of: [allReducerCalls], timeout: 0.1)
 
         XCTAssertEqual(deps.reducer.messages.map(\.event), [sutEvent, effectHandlerEvent])
     }
@@ -89,12 +93,13 @@ final class ViewStoreTests: XCTestCase {
         let deps: Dependencies
         (sut, deps) = makeSUT(state: makeSampleState())
 
-        deps.effectHandler.handleBlock = { _ in
-            effectStarted.fulfill()
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 10_000_000)
+        deps.effectHandler.streamProvider = { @Sendable _ in
+            AsyncStream { continuation in
+                effectStarted.fulfill()
+                continuation.onTermination = { @Sendable _ in
+                    effectCancelled.fulfill()
+                }
             }
-            effectCancelled.fulfill()
         }
         deps.reducer.stub = [(makeSampleState(), makeSampleEffect())]
 
