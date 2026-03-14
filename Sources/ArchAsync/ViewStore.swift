@@ -53,9 +53,8 @@ where R: Reducer, R.State == State, R.Event == Event, R.Effect == Effect,
     /// - Parameter event: The event to process.
     public func handle(_ event: Event) {
         if let effect = reducer.reduce(&state, event) {
-            let handler = effectHandler
+            let events = effectHandler.handle(effect)
             let task = Task.detached { [weak self] in
-                let events = handler.handle(effect)
                 for await event in events {
                     if Task.isCancelled { return }
                     await self?.handle(event)
