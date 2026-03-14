@@ -117,6 +117,7 @@ final class TodoEffectHandler: EffectHandler, Sendable {
             let storage = self.storage
             return AsyncStream { continuation in
                 let task = Task {
+                    defer { continuation.finish() }
                     do {
                         let todos = try await storage.loadTodos()
                         guard !Task.isCancelled else { return }
@@ -125,7 +126,6 @@ final class TodoEffectHandler: EffectHandler, Sendable {
                         guard !Task.isCancelled else { return }
                         continuation.yield(.loadingFailed(error.localizedDescription))
                     }
-                    continuation.finish()
                 }
                 self.tasksBag.add(task)
             }
