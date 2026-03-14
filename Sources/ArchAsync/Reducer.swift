@@ -7,7 +7,7 @@
 
 import Foundation
 
-public protocol Reducer<State, Event, Effect> {
+public protocol Reducer<State, Event, Effect>: Sendable {
     associatedtype State
     associatedtype Event
     associatedtype Effect
